@@ -1,0 +1,20 @@
+/bin/
+/data/
+/healbot
+*.exe
+*.test
+coverage.out
+.DS_Store
+
+# Local config and secret material. The committed configs are examples only.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+config.yaml
+config.local.yaml
+*.local.yaml
+*.local.yml

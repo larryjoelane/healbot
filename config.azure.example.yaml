@@ -1,0 +1,70 @@
+# Copy to config.yaml for a real subscription.
+# Credentials come from DefaultAzureCredential (managed identity in Azure,
+# Azure CLI locally). Do not put secrets in this file.
+
+server:
+  addr: ":43117"
+  webhook_token: ""   # set HEALBOT_WEBHOOK_TOKEN; empty rejects ingest in azure mode
+  admin_token: ""     # set HEALBOT_ADMIN_TOKEN; empty rejects control actions in azure mode
+
+mode: azure
+dry_run: true         # ceiling. Set false only after a resource also opts in.
+
+azure:
+  subscription_id: "" # or HEALBOT_SUBSCRIPTION_ID
+  workspace_id: ""    # Log Analytics workspace GUID, optional
+
+audit:
+  path: /var/lib/healbot/audit.jsonl
+  sync: false
+  max_memory: 5000
+
+safety:
+  cooldown: 10m
+  max_per_hour: 3
+  breaker_failures: 2
+  breaker_open_for: 30m
+
+escalation:
+  deploy_window: 2h
+  notify_counts: [1, 10, 50, 100]
+
+resources: []
+  # - id: /subscriptions/.../providers/Microsoft.Web/sites/api
+  #   max_tier: 2
+  #   dry_run: false
+  #   allowed_actions: [restart, slot_swap]
+  #   known_good_slot: staging
+  #   health_url: https://api.example.com/health
+  #   max_instances: 5
+
+notify:
+  stdout: true
+  webhooks:
+    - name: teams
+      url: ""          # incoming webhook
+      format: teams    # teams | slack | json
+
+llm:
+  provider: heuristic # azure_openai
+  endpoint: ""        # AZURE_OPENAI_ENDPOINT
+  deployment: ""      # AZURE_OPENAI_DEPLOYMENT
+  api_version: "2024-10-21"
+
+repo:
+  provider: github    # mock | github | azure_devops
+  github:
+    owner: ""
+    repo: ""
+    token_env: GITHUB_TOKEN
+
+poller:
+  enabled: false
+  every: 1m
+  lookback: 15m
+  kql: |
+    exceptions
+    | where timestamp > ago(15m)
+    | extend ResourceId = tostring(customDimensions["ResourceId"])
+    | project timestamp, problemId, outerMessage, operation_Name, ResourceId, details
+    | take 200
