@@ -46,6 +46,9 @@ func FromIncident(inc model.Incident, kind string) Message {
 	if inc.PullRequest != nil {
 		fmt.Fprintf(&b, "\nPull request (not merged): %s\n%s\n", inc.PullRequest.Title, inc.PullRequest.URL)
 	}
+	if inc.Issue != nil {
+		fmt.Fprintf(&b, "\nIssue (%s, not a merge): %s\n%s\n", inc.Issue.Agent, inc.Issue.Title, inc.Issue.URL)
+	}
 	fmt.Fprintf(&b, "\nEvent: %s\n", kind)
 	return Message{
 		IncidentID: inc.ID,

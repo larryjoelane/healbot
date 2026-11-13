@@ -156,29 +156,66 @@ func (p *Pipeline) HandleSignal(ctx context.Context, sig *model.Signal) (Result,
 	}
 
 	want3, rules3 := p.Policy.Want(3, inc, bundle.RecentDeploy, outcome)
-	if want3 && resPol.MaxTier >= 3 && inc.PullRequest == nil {
-		ref, files, err := p.Fix.Open(ctx, inc, outcome)
+	if want3 && resPol.MaxTier >= 3 && inc.PullRequest == nil && inc.Issue == nil {
+		out, err := p.Fix.Open(ctx, inc, outcome, resPol)
+		if out.Fallback != "" {
+			p.event(model.AuditFixFallback, inc.ID, out.Fallback, map[string]string{
+				"requested": out.Requested, "mode": out.Mode, "rules": join(rules3),
+			})
+		}
+		if out.Warning != "" {
+			p.event(model.AuditFixWarning, inc.ID, out.Warning, map[string]string{"mode": out.Mode})
+		}
 		if err != nil {
 			inc, _ = p.Store.Update(inc.ID, func(x *model.Incident) { x.Status = model.StatusAwaitingHuman })
-			p.event(model.AuditPRFailed, inc.ID, err.Error(), map[string]string{"rules": join(rules3)})
+			p.event(model.AuditPRFailed, inc.ID, err.Error(), map[string]string{"rules": join(rules3), "mode": out.Mode})
 			return Result{Incident: inc, Created: abs.Created, Matched: true}, nil
 		}
 		inc, _ = p.Store.Update(inc.ID, func(x *model.Incident) {
-			x.PullRequest = &ref
-			x.ProposedFiles = files
-			x.Status = model.StatusPROpened
+			if out.Ref.ID != "" {
+				ref := out.Ref
+				x.PullRequest = &ref
+				x.ProposedFiles = out.Files
+				x.Status = model.StatusPROpened
+			}
+			if out.Issue != nil {
+				iss := *out.Issue
+				x.Issue = &iss
+				if x.PullRequest == nil {
+					x.Status = model.StatusIssueOpened
+				}
+			}
 			x.TierReached = model.TierCodeFix
 		})
-		p.event(model.AuditPROpened, inc.ID, ref.Title, map[string]string{
-			"provider": ref.Provider, "url": ref.URL, "branch": ref.Branch, "rules": join(rules3),
-		})
-		p.event(model.AuditEscalated, inc.ID, "tier 2 outcome "+outcome+" escalated to a pull request for human review", nil)
-		p.notify(ctx, inc, "pr_opened")
+		if inc.PullRequest != nil {
+			p.event(model.AuditPROpened, inc.ID, inc.PullRequest.Title, map[string]string{
+				"provider": inc.PullRequest.Provider, "url": inc.PullRequest.URL,
+				"branch": inc.PullRequest.Branch, "rules": join(rules3),
+				"mode": out.Mode, "ci": inc.PullRequest.CI,
+			})
+			if inc.PullRequest.CI != "" {
+				p.event(model.AuditFixCI, inc.ID, inc.PullRequest.CI, map[string]string{"ci": inc.PullRequest.CI})
+			}
+		}
+		if inc.Issue != nil {
+			p.event(model.AuditIssueOpened, inc.ID, inc.Issue.Title, map[string]string{
+				"provider": inc.Issue.Provider, "url": inc.Issue.URL,
+				"agent": inc.Issue.Agent, "assignee": inc.Issue.Assignee, "rules": join(rules3),
+			})
+		}
+		msg := "tier 2 outcome " + outcome + " escalated to a pull request for human review"
+		kind := "pr_opened"
+		if inc.Issue != nil && inc.PullRequest == nil {
+			msg = "tier 2 outcome " + outcome + " escalated to an issue for an agent"
+			kind = "issue_opened"
+		}
+		p.event(model.AuditEscalated, inc.ID, msg, nil)
+		p.notify(ctx, inc, kind)
 		return Result{Incident: inc, Created: abs.Created, Matched: true}, nil
 	}
 
 	inc, _ = p.Store.Update(inc.ID, func(x *model.Incident) {
-		if x.Status != model.StatusPROpened && x.Status != model.StatusResolved {
+		if x.Status != model.StatusPROpened && x.Status != model.StatusIssueOpened && x.Status != model.StatusResolved {
 			if outcome == "skipped" && x.TierReached <= model.TierDetect {
 				x.Status = model.StatusDiagnosed
 			} else {

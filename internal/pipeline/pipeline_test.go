@@ -2,6 +2,8 @@ package pipeline
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -153,6 +155,70 @@ func testPipe(t *testing.T, killed bool) (*Pipeline, *fake.Runtime, *fix.Memory,
 		Now:      func() time.Time { return now },
 	}
 	return p, rt, mem, log
+}
+
+type failModel struct{}
+
+func (failModel) Complete(context.Context, string, string) (string, error) {
+	return "", fmt.Errorf("model down")
+}
+
+func TestModelPatchFallbackIsAudited(t *testing.T) {
+	p, _, mem, log := testPipe(t, false)
+	p.Fix.Model = failModel{}
+	p.Fix.Fix.Mode = config.FixModeModelPatch
+	res, err := p.HandleSignal(context.Background(), exampleSignal())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Incident.Status != model.StatusPROpened || res.Incident.PullRequest == nil {
+		t.Fatalf("%+v", res.Incident)
+	}
+	if res.Incident.PullRequest.Mode != config.FixModeTemplate {
+		t.Fatal(res.Incident.PullRequest.Mode)
+	}
+	kinds := map[string]string{}
+	for _, e := range log.ByIncident(res.Incident.ID) {
+		kinds[e.Kind] = e.Message
+	}
+	if !strings.Contains(kinds[model.AuditFixFallback], "model down") {
+		t.Fatalf("%v", kinds)
+	}
+	pr, ok := mem.Get(res.Incident.PullRequest.ID)
+	if !ok || !strings.Contains(pr.Body, "Mode fallback") {
+		t.Fatal(pr.Body)
+	}
+}
+
+func TestIssueModeOpensNoPullRequest(t *testing.T) {
+	p, _, mem, log := testPipe(t, false)
+	cfg := config.Demo()
+	cfg.Resources[0].FixMode = "copilot_issue"
+	p.Policy = policy.New(cfg)
+	p.Fix.Issues = mem
+	p.Fix.Source = mem
+	p.Fix.Fix.Mode = config.FixModeTemplate
+	res, err := p.HandleSignal(context.Background(), exampleSignal())
+	if err != nil {
+		t.Fatal(err)
+	}
+	inc := res.Incident
+	if inc.Status != model.StatusIssueOpened || inc.PullRequest != nil || inc.Issue == nil {
+		t.Fatalf("status=%s pr=%v issue=%v", inc.Status, inc.PullRequest, inc.Issue)
+	}
+	if len(mem.List()) != 0 {
+		t.Fatal("issue mode created a pull request")
+	}
+	if inc.Issue.Agent != "copilot" {
+		t.Fatal(inc.Issue.Agent)
+	}
+	kinds := map[string]bool{}
+	for _, e := range log.ByIncident(inc.ID) {
+		kinds[e.Kind] = true
+	}
+	if !kinds[model.AuditIssueOpened] {
+		t.Fatalf("%v", kinds)
+	}
 }
 
 func exampleSignal() *model.Signal {

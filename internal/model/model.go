@@ -118,6 +118,7 @@ const (
 	StatusResolved      Status = "resolved"
 	StatusEscalated     Status = "escalated"
 	StatusPROpened      Status = "pr_opened"
+	StatusIssueOpened   Status = "issue_opened"
 	StatusAwaitingHuman Status = "awaiting_human"
 	StatusSuppressed    Status = "suppressed"
 )
@@ -214,6 +215,19 @@ type PullRequestRef struct {
 	URL      string `json:"url"`
 	Title    string `json:"title"`
 	Branch   string `json:"branch"`
+	SHA      string `json:"sha,omitempty"`
+	Mode     string `json:"mode,omitempty"`
+	CI       string `json:"ci,omitempty"`
+}
+
+// IssueRef points at a GitHub issue opened for an agent. It is not a merge.
+type IssueRef struct {
+	Provider string `json:"provider"`
+	ID       string `json:"id"`
+	URL      string `json:"url"`
+	Title    string `json:"title"`
+	Assignee string `json:"assignee,omitempty"`
+	Agent    string `json:"agent,omitempty"`
 }
 
 // Incident is a deduplicated group of signals plus everything the tiers did.
@@ -241,6 +255,7 @@ type Incident struct {
 	Suppressed    bool            `json:"suppressed"`
 	Actions       []ActionRecord  `json:"actions,omitempty"`
 	PullRequest   *PullRequestRef `json:"pull_request,omitempty"`
+	Issue         *IssueRef       `json:"issue,omitempty"`
 	ProposedFiles []ProposedFile  `json:"proposed_files,omitempty"`
 }
 
@@ -294,6 +309,10 @@ const (
 	AuditEscalated           = "escalation.tier3"
 	AuditPROpened            = "pr.opened"
 	AuditPRFailed            = "pr.failed"
+	AuditIssueOpened         = "issue.opened"
+	AuditFixFallback         = "fix.fallback"
+	AuditFixWarning          = "fix.warning"
+	AuditFixCI               = "fix.ci"
 	AuditKillSwitch          = "kill_switch.changed"
 	AuditSuppressed          = "incident.suppressed"
 	AuditAutomationBlocked   = "automation.blocked"

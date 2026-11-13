@@ -79,6 +79,18 @@ llm:
 repo:
   provider: mock
 
+# Tier 3. template is the default and does not call a model.
+# model_patch uses the in-process demo model when mode is demo.
+# issue (alias copilot_issue) records a GitHub issue on the fake provider.
+# A resource may set fix_mode and fix_agent to override this.
+fix:
+  mode: template
+  wait_for_ci: false
+  issue:
+    agent: copilot
+    assignee: copilot-swe-agent[bot]
+    mention: "@claude"
+
 poller:
   enabled: false
   every: 1m

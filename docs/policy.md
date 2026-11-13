@@ -17,6 +17,8 @@ Policy is the YAML under `escalation` and `resources`. The engine is `internal/p
 | `known_good_revision` | Container revision to activate. Empty uses the previous revision. |
 | `consumer_resource_id` | Function App or worker restarted by `restart_consumer`. |
 | `health_url` | HTTP probe. 2xx means the action held. |
+| `fix_mode` | Optional override of `fix.mode` for this resource: `template`, `model_patch`, or `issue` (`copilot_issue` is an alias). Empty inherits the process mode. |
+| `fix_agent` | Optional override of `fix.issue.agent` for this resource: `copilot`, `claude`, or `none`. |
 
 ## Rules
 
@@ -43,7 +45,7 @@ Tier 1 diagnosis runs for a new incident, a worse severity, or a notify mileston
 
 `repeat-offender` allows tier 2 after five occurrences at sev3 or worse, still subject to the allowlist.
 
-`code-pull-request` opens one pull request when the hypothesis says the cause is code and tier 2 ended in `dry_run`, `failed`, `not_hold`, `unverified`, `skipped`, `rate_limited`, `cooldown`, `breaker_open`, or `at_capacity`.
+`code-pull-request` reaches tier 3 when the hypothesis says the cause is code and tier 2 ended in `dry_run`, `failed`, `not_hold`, `unverified`, `skipped`, `rate_limited`, `cooldown`, `breaker_open`, or `at_capacity`. What tier 3 opens depends on `fix.mode`: a template pull request, a model patch, or an issue. See [fix.md](fix.md).
 
 ## Action choice
 

@@ -37,6 +37,7 @@ resources: []
   #   known_good_slot: staging
   #   health_url: https://api.example.com/health
   #   max_instances: 5
+  #   fix_mode: template   # optional override: template | model_patch | issue
 
 notify:
   stdout: true
@@ -57,6 +58,22 @@ repo:
     owner: ""
     repo: ""
     token_env: GITHUB_TOKEN
+
+# Tier 3. template does not call a model and does not assign an agent.
+# model_patch reuses llm.endpoint with managed identity unless api_key_env is set.
+# issue assigns the Copilot coding agent, or mentions @claude when issue.agent is claude.
+# See docs/fix.md for token permissions. Do not put the token in this file.
+fix:
+  mode: template
+  wait_for_ci: false
+  # allow_paths: ["src/**", "tests/**"]
+  # allow_denied_paths: []   # exceptions to the CI, secret, infra, and lockfile denylist
+  issue:
+    agent: copilot       # copilot | claude | none
+    assignee: copilot-swe-agent[bot]
+    mention: "@claude"
+    # custom_agent: incident-fix
+    # labels: ["claude"]
 
 poller:
   enabled: false

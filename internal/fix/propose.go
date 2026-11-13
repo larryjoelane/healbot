@@ -10,9 +10,11 @@ import (
 )
 
 // File is one path in the proposed change.
+// Update is true when the path already exists and the provider should replace it.
 type File struct {
 	Path    string
 	Content string
+	Update  bool
 }
 
 // Draft is a branch and a description. Providers create it. They do not merge it.
@@ -23,39 +25,17 @@ type Draft struct {
 	Files  []File
 }
 
-// Provider creates a pull request in a host.
+// Provider creates a pull request in a host. Implementations have no merge method.
 type Provider interface {
 	Name() string
 	Create(ctx context.Context, draft Draft) (model.PullRequestRef, error)
-}
-
-// Service turns a diagnosis into a draft and asks the provider to open it.
-type Service struct {
-	Provider Provider
-}
-
-// Open builds a patch and a regression test, then opens a pull request.
-func (s Service) Open(ctx context.Context, inc model.Incident, tier2Outcome string) (model.PullRequestRef, []model.ProposedFile, error) {
-	if s.Provider == nil {
-		return model.PullRequestRef{}, nil, fmt.Errorf("no repository provider configured")
-	}
-	draft := Propose(inc, tier2Outcome)
-	ref, err := s.Provider.Create(ctx, draft)
-	if err != nil {
-		return model.PullRequestRef{}, nil, err
-	}
-	files := make([]model.ProposedFile, len(draft.Files))
-	for i, f := range draft.Files {
-		files[i] = model.ProposedFile{Path: f.Path, Content: f.Content}
-	}
-	return ref, files, nil
 }
 
 // Propose builds the branch contents. The patch is a suggestion for review.
 func Propose(inc model.Incident, tier2Outcome string) Draft {
 	branch := "healbot/" + sanitize(inc.ID)
 	title, files := filesFor(inc)
-	body := renderBody(inc, tier2Outcome, title)
+	body := renderBody(inc, tier2Outcome, title, "template")
 	return Draft{Title: title, Body: body, Branch: branch, Files: files}
 }
 
@@ -127,18 +107,21 @@ public class OrderServiceTests
 	}
 }
 
-func renderBody(inc model.Incident, outcome, title string) string {
+func renderBody(inc model.Incident, outcome, title, mode string) string {
 	var b strings.Builder
 	b.WriteString("## Healbot diagnosis\n\n")
 	b.WriteString("This pull request was opened for a human review. **Healbot does not merge pull requests.**\n\n")
-	fmt.Fprintf(&b, "- Incident: `%s`\n- Resource: `%s`\n- Severity: `%s`\n- Tier 2 outcome: `%s`\n\n", inc.ID, inc.ResourceID, inc.Severity, outcome)
+	if mode == "" {
+		mode = "template"
+	}
+	fmt.Fprintf(&b, "- Incident: `%s`\n- Resource: `%s`\n- Severity: `%s`\n- Tier 2 outcome: `%s`\n- Fix mode: `%s`\n\n", inc.ID, inc.ResourceID, inc.Severity, outcome, mode)
 	if inc.Hypothesis != nil {
 		fmt.Fprintf(&b, "### Hypothesis\n\n%s\n\nConfidence %.0f%% via %s. Category `%s`.\n\n", inc.Hypothesis.Summary, inc.Hypothesis.Confidence*100, inc.Hypothesis.Provider, inc.Hypothesis.Category)
 		if len(inc.Hypothesis.Evidence) > 0 {
 			b.WriteString("Evidence:\n\n")
 			for _, e := range inc.Hypothesis.Evidence {
 				b.WriteString("- ")
-				b.WriteString(e)
+				b.WriteString(redact(e))
 				b.WriteString("\n")
 			}
 			b.WriteString("\n")
@@ -146,7 +129,7 @@ func renderBody(inc model.Incident, outcome, title string) string {
 	}
 	if inc.StackTrace != "" {
 		b.WriteString("### Stack\n\n```\n")
-		b.WriteString(inc.StackTrace)
+		b.WriteString(redact(inc.StackTrace))
 		b.WriteString("\n```\n\n")
 	}
 	b.WriteString("### Why this is not auto-applied\n\n")

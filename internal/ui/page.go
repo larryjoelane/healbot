@@ -169,8 +169,13 @@ pre { white-space: pre-wrap; word-break: break-word; font: 12px/1.45 ui-monospac
         <h2>Tier 3</h2>
         {{if .Incident.PullRequest}}
           <p><a href="{{.Incident.PullRequest.URL}}">{{.Incident.PullRequest.Title}}</a></p>
-          <p class="muted">{{.Incident.PullRequest.Provider}} · {{.Incident.PullRequest.Branch}} · not merged</p>
-        {{else}}<p class="muted">No pull request.</p>{{end}}
+          <p class="muted">{{.Incident.PullRequest.Provider}} · {{.Incident.PullRequest.Branch}}{{if .Incident.PullRequest.Mode}} · {{.Incident.PullRequest.Mode}}{{end}}{{if .Incident.PullRequest.CI}} · ci {{.Incident.PullRequest.CI}}{{end}} · not merged</p>
+        {{end}}
+        {{if .Incident.Issue}}
+          <p>{{if .Incident.Issue.URL}}<a href="{{.Incident.Issue.URL}}">{{.Incident.Issue.Title}}</a>{{else}}{{.Incident.Issue.Title}}{{end}}</p>
+          <p class="muted">{{.Incident.Issue.Agent}} · {{.Incident.Issue.Assignee}} · issue only, not merged</p>
+        {{end}}
+        {{if and (not .Incident.PullRequest) (not .Incident.Issue)}}<p class="muted">No pull request.</p>{{end}}
       </div>
     </div>
     <div>

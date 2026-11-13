@@ -50,14 +50,14 @@ The pipeline in `internal/pipeline` is the only place that orders the tiers:
 3. If the kill switch is on, stop.
 4. If a tier-2 rule matches and the resource allows the tier, pick one catalog action and hand it to the executor.
 5. If the outcome is `verified`, resolve the incident.
-6. If a tier-3 rule matches the outcome and the resource allows tier 3, open one pull request.
+6. If a tier-3 rule matches the outcome and the resource allows tier 3, open one pull request or, in issue mode, one GitHub issue.
 
-A second signal for the same fingerprint does not open a second pull request.
+A second signal for the same fingerprint does not open a second pull request or issue. The mode is `fix.mode`, overridden by `HEALBOT_FIX_MODE`, then by the resource `fix_mode` when that field is set. `model_patch` reads instruction files and stack-trace paths from the repository, asks the model for a patch, and falls back to the template when that fails.
 
 ## Providers
 
 `platform.Runtime` is the Azure boundary. `internal/azure` implements it with the Azure SDK. `internal/platform/fake` implements it for the simulator and the tier tests. Diagnosis, remediation, and the poller depend on the interface, not on the SDK.
 
-`fix.Provider` is the git boundary. `Memory`, `GitHub`, and `AzureDevOps` implement `Create`. None of them implement a merge.
+`fix.Provider` is the git boundary. `Memory`, `GitHub`, and `AzureDevOps` implement `Create`. GitHub and Azure DevOps also read file contents. GitHub can open an issue and assign the Copilot coding agent. None of them implement a merge. The text model is a `fix.Completer`. Azure OpenAI is the production implementation, reused from diagnosis. Demo mode uses an in-process stand-in so `model_patch` and `issue` run without a network.
 
 `notify.Delivery` is the outbound boundary. Stdout, webhook, GitHub issues, and SMTP all take the same `Message`.

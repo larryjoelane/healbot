@@ -117,3 +117,35 @@ func TestAzureDevOpsOpensPR(t *testing.T) {
 		t.Fatalf("%+v", ref)
 	}
 }
+
+func TestAzureDevOpsReadsFile(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(strings.ToLower(r.URL.Path), "merge") {
+			t.Errorf("merge called: %s", r.URL.String())
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(r.URL.RawQuery, "scopePath") {
+			if strings.Contains(r.URL.RawQuery, "incident-fix") {
+				_, _ = io.WriteString(w, `{"value":[]}`)
+				return
+			}
+			_, _ = io.WriteString(w, `{"value":[{"path":"/src/app.go","isFolder":false},{"path":"/.claude/skills/incident-fix","isFolder":true}]}`)
+			return
+		}
+		if strings.Contains(r.URL.RawQuery, "path=") {
+			_, _ = io.WriteString(w, `{"path":"/src/app.go","content":"package app\n"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+	client := &AzureDevOps{BaseURL: srv.URL, Org: "example-org", Project: "example", Repo: "api", Token: "test-token", HTTP: srv.Client()}
+	body, missing, err := client.Read(context.Background(), "src/app.go", "")
+	if err != nil || missing || !strings.Contains(body, "package app") {
+		t.Fatalf("body=%q missing=%v err=%v", body, missing, err)
+	}
+	files, err := client.ListFiles(context.Background(), ".claude/skills", "")
+	if err != nil || len(files) != 1 || files[0] != "src/app.go" {
+		t.Fatalf("%v %v", files, err)
+	}
+}

@@ -23,7 +23,7 @@ That starts the bot, posts one Azure Monitor common-alert payload, and prints th
 
 1. Tier 1: `System.NullReferenceException` in `OrderService.Place` after a slot swap twelve minutes ago.
 2. Tier 2: a dry-run plan to swap the `staging` slot back. The fake Azure runtime records no call.
-3. Tier 3: a pull request on the in-memory repository, including a regression test. Nothing is merged.
+3. Tier 3: a pull request on the in-memory repository, including a regression test. Nothing is merged. The default fix mode is `template`. Set `fix.mode` to `model_patch` or `issue` to exercise the other modes on the in-memory provider. Demo mode uses that provider and an in-process model, so it does not call Azure OpenAI.
 
 Run the service on its own and open the console:
 
@@ -39,9 +39,9 @@ go run ./cmd/healbot -config config.demo.yaml
 | --- | --- | --- |
 | 1 Detect | Group signals, gather deployments, write a hypothesis, notify | Change Azure or git |
 | 2 Remediate | Restart, scale out, swap a slot, roll a container revision, restart a queue consumer | Delete resources, edit app settings, purge queues, run shell |
-| 3 Code fix | Open a GitHub or Azure DevOps pull request with a patch and a test | Merge, approve, or complete the pull request |
+| 3 Code fix | Open a pull request or a GitHub issue, using the configured mode | Merge, approve, or complete the pull request |
 
-Unknown resources are capped at tier 1. Global `dry_run: true` cannot be overridden by a resource. See [docs/safety.md](docs/safety.md) and [docs/policy.md](docs/policy.md).
+Unknown resources are capped at tier 1. Global `dry_run: true` cannot be overridden by a resource. Tier 3 mode, validation, and the architecture guide are in [docs/fix.md](docs/fix.md). See also [docs/safety.md](docs/safety.md) and [docs/policy.md](docs/policy.md).
 
 ## Configuration
 
@@ -59,8 +59,18 @@ Unknown resources are capped at tier 1. Global `dry_run: true` cannot be overrid
 | `HEALBOT_AUDIT_PATH` | JSONL audit file. Empty keeps it in memory |
 | `AZURE_OPENAI_ENDPOINT` / `AZURE_OPENAI_DEPLOYMENT` | Optional model. The heuristic remains the fallback |
 | `GITHUB_TOKEN` / `AZDO_TOKEN` | Only when `repo.provider` is not `mock` |
+| `HEALBOT_FIX_MODE` | `template` (default), `model_patch`, or `issue` (`copilot_issue` is an alias) |
+| `HEALBOT_FIX_AGENT` | Issue agent: `copilot`, `claude`, or `none` |
+| `HEALBOT_FIX_ASSIGNEE` | GitHub login assigned in Copilot issue mode. Default `copilot-swe-agent[bot]` |
+| `HEALBOT_FIX_MENTION` | Mention posted for the Claude Code agent. Default `@claude` |
+| `HEALBOT_FIX_WAIT_CI` | `true` polls the pull request head and labels it. Healbot still does not merge |
+| `HEALBOT_FIX_CUSTOM_AGENT` | Copilot custom agent name, such as `incident-fix` |
+| `HEALBOT_FIX_LABELS` | Comma-separated issue labels |
+| `HEALBOT_FIX_BASE_BRANCH` | Branch the Copilot agent starts from |
 
 `mode: azure` uses `azidentity.NewDefaultAzureCredential`. In Azure that is the container app's system-assigned managed identity. Locally it is the Azure CLI session. Healbot does not read a client secret from code.
+
+`deploy/main.bicep` does not set the `HEALBOT_FIX_*` variables. Leave them unset to keep `template`. An open Terraform change (pull request #2, branch `cursor/azure-appservice-terraform-4121`) is not on `main` and does not define them either. When that stack is merged, add the same variables as app settings if you want a mode other than `template`. The names are listed in [docs/fix.md](docs/fix.md).
 
 ## Ingest
 
@@ -129,7 +139,7 @@ internal/ingest    alert and log parsers, bounded pool
 internal/group     fingerprint and sharded counter
 internal/pipeline  tier loop
 internal/remediate runbooks
-internal/fix       pull requests (mock, GitHub, Azure DevOps)
+internal/fix       tier-3 modes (template, model patch, issue)
 internal/azure     DefaultAzureCredential adapters
 deploy/main.bicep  the bot, the role, the action group
 ```
@@ -145,4 +155,4 @@ Not implemented, on purpose:
 - Arbitrary ARM writes. The runtime exposes only the runbook methods.
 - A claim that a live action succeeded when health cannot be checked. Missing `health_url` on App Service ends as `unverified` and escalates.
 
-The heuristic is the default diagnosis. Azure OpenAI is used only when `llm.provider` is `azure_openai` and the endpoint is set. A model failure falls back to the heuristic and is written to the audit log.
+The heuristic is the default diagnosis. Azure OpenAI is used for diagnosis when `llm.provider` is `azure_openai` and the endpoint is set, and for a tier-3 patch when `fix.mode` is `model_patch`. A model failure falls back to the heuristic or the template pull request and is written to the audit log. The default tier-3 mode stays `template`, which does not call a model. Copy [templates/incident-fix](templates/incident-fix/README.md) into a target repository when you want Copilot and Claude Code to share one architecture guide.

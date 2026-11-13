@@ -60,3 +60,31 @@ func TestAzureModeRejectsDemoToken(t *testing.T) {
 		t.Fatal("azure mode accepted the demo-only webhook token")
 	}
 }
+
+func TestFixModeEnvOverrideAndRejection(t *testing.T) {
+	t.Setenv("HEALBOT_MODE", "")
+	t.Setenv("HEALBOT_DRY_RUN", "")
+	t.Setenv("HEALBOT_SUBSCRIPTION_ID", "")
+	t.Setenv("AZURE_SUBSCRIPTION_ID", "")
+	t.Setenv("HEALBOT_WEBHOOK_TOKEN", "")
+	t.Setenv("HEALBOT_ADMIN_TOKEN", "")
+	t.Setenv("HEALBOT_FIX_MODE", "copilot_issue")
+	t.Setenv("HEALBOT_FIX_AGENT", "claude")
+	t.Setenv("HEALBOT_FIX_ASSIGNEE", "copilot-swe-agent[bot]")
+	t.Setenv("HEALBOT_FIX_WAIT_CI", "true")
+	cfg, err := Load(filepath.Join("..", "..", "config.demo.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mode, err := NormalizeFixMode(cfg.Fix.Mode)
+	if err != nil || mode != FixModeIssue {
+		t.Fatalf("mode %s err %v", cfg.Fix.Mode, err)
+	}
+	if cfg.Fix.Issue.Agent != FixAgentClaude || !cfg.Fix.WaitForCI {
+		t.Fatalf("%+v", cfg.Fix)
+	}
+	t.Setenv("HEALBOT_FIX_MODE", "ship-it")
+	if _, err := Load(filepath.Join("..", "..", "config.demo.yaml")); err == nil {
+		t.Fatal("invalid fix mode was accepted")
+	}
+}

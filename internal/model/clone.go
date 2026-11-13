@@ -18,6 +18,10 @@ func (in Incident) Clone() Incident {
 		pr := *in.PullRequest
 		out.PullRequest = &pr
 	}
+	if in.Issue != nil {
+		iss := *in.Issue
+		out.Issue = &iss
+	}
 	if in.ProposedFiles != nil {
 		out.ProposedFiles = append([]ProposedFile(nil), in.ProposedFiles...)
 	}
