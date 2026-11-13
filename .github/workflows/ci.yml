@@ -1,0 +1,37 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Secret scan
+        env:
+          GITLEAKS_VERSION: "8.30.1"
+        run: |
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C /usr/local/bin gitleaks
+          gitleaks detect --source . --redact --verbose --exit-code 1
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.x"
+          cache: true
+      - name: Test
+        run: go test ./...
+      - name: Race
+        run: go test -race ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Benchmarks
+        run: go test -bench=. -benchtime=30ms -run='^$' ./internal/ingest ./internal/group ./internal/store
+      - name: Lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.15.0
+          args: --timeout=5m

@@ -1,0 +1,91 @@
+server:
+  addr: ":43117"
+  # demo-token is a placeholder for local demo mode only. Never use it when mode is azure.
+  webhook_token: demo-token
+
+mode: demo
+dry_run: true
+
+audit:
+  path: data/audit.jsonl
+  sync: true
+  max_memory: 2000
+
+ingest:
+  workers: 4
+  queue: 256
+  diagnose_workers: 2
+  diagnose_queue: 64
+
+safety:
+  cooldown: 10m
+  max_per_hour: 3
+  breaker_failures: 2
+  breaker_open_for: 30m
+
+escalation:
+  deploy_window: 2h
+  notify_counts: [1, 10, 50, 100]
+  rules:
+    - name: diagnose
+      tier: 1
+      min_severity: sev3
+      min_count: 1
+    - name: rollback-after-deploy
+      tier: 2
+      min_severity: sev2
+      min_count: 1
+      requires_recent_deploy: true
+      categories: [code, deployment, config]
+    - name: capacity-or-dependency
+      tier: 2
+      min_severity: sev2
+      min_count: 1
+      categories: [capacity, dependency]
+    - name: repeat-offender
+      tier: 2
+      min_severity: sev3
+      min_count: 5
+    - name: code-pull-request
+      tier: 3
+      min_severity: sev2
+      min_count: 1
+      requires_likely_code: true
+      when_tier2: [dry_run, failed, not_hold, unverified, skipped, rate_limited, cooldown, breaker_open, at_capacity]
+
+resources:
+  - id: /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/example-rg/providers/Microsoft.Web/sites/example-api
+    max_tier: 3
+    dry_run: true
+    allowed_actions: [restart, scale_out, slot_swap, restart_consumer]
+    cooldown: 10m
+    max_actions_per_hour: 3
+    max_instances: 5
+    known_good_slot: staging
+  - id: /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/example-rg/providers/Microsoft.Web/sites/example-worker
+    max_tier: 2
+    dry_run: true
+    allowed_actions: [scale_out, restart]
+    cooldown: 10m
+    max_actions_per_hour: 3
+    max_instances: 4
+
+notify:
+  stdout: true
+
+llm:
+  provider: heuristic
+
+repo:
+  provider: mock
+
+poller:
+  enabled: false
+  every: 1m
+  lookback: 15m
+  kql: |
+    exceptions
+    | where timestamp > ago(15m)
+    | extend ResourceId = tostring(customDimensions["ResourceId"])
+    | project timestamp, problemId, outerMessage, operation_Name, ResourceId, details
+    | take 200
