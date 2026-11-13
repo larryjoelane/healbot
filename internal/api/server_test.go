@@ -142,3 +142,32 @@ func TestDemoPage(t *testing.T) {
 	}
 	_ = context.Background()
 }
+
+func TestDemoConsoleEmbedsAdminToken(t *testing.T) {
+	srv := testServer(t)
+	srv.Config.Server.AdminToken = "demo-token"
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != 200 || !bytes.Contains(rec.Body.Bytes(), []byte("demo-token")) {
+		t.Fatalf("demo console should embed the admin token, %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestAzureConsoleOmitsAdminToken(t *testing.T) {
+	srv := testServer(t)
+	srv.Config.Mode = "azure"
+	srv.Config.Server.AdminToken = "not-a-real-token-value"
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != 200 {
+		t.Fatalf("%d %s", rec.Code, rec.Body.String())
+	}
+	if bytes.Contains(rec.Body.Bytes(), []byte("not-a-real-token-value")) {
+		t.Fatal("azure console embedded the admin token")
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte(`type="password"`)) {
+		t.Fatal("azure console should ask for the admin token")
+	}
+}

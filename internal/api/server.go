@@ -312,11 +312,18 @@ func (s *Server) page(title, view string, inc model.Incident, pull fix.Pull) ui.
 	} else {
 		events = s.Audit.List(40)
 	}
+	// The console is unauthenticated. Demo mode embeds the well-known
+	// placeholder so the local buttons work. Any other mode leaves the
+	// token out of the HTML; the operator types it into the control form.
+	admin := ""
+	if s.Config.Mode == "demo" {
+		admin = s.Config.Server.AdminToken
+	}
 	return ui.Page{
 		Title: title, View: view, Mode: s.Config.Mode,
 		DryRun: s.Config.GlobalDryRun(), Killed: s.Gate.Killed(),
 		Incidents: s.Store.List(), Incident: inc, Events: events, Pull: pull,
-		AdminToken: s.Config.Server.AdminToken,
+		AdminToken: admin,
 	}
 }
 

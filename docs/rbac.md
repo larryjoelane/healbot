@@ -1,6 +1,8 @@
 # Least-privilege RBAC
 
-Healbot's identity is the system-assigned managed identity on the container app. `deploy/main.bicep` creates a custom role, **Healbot Operator**, scoped to the resource group, and assigns it to that identity.
+Healbot's identity is a managed identity. `deploy/main.bicep` uses the system-assigned identity on the container app. `deploy/terraform` uses a user-assigned identity so Key Vault and registry grants exist before the app starts, and sets `AZURE_CLIENT_ID` so `DefaultAzureCredential` selects it. Both create a custom role, **Healbot Operator**, and assign it to that identity.
+
+The Bicep role is defined on the bot's resource group. Terraform defines one role per operator scope: the bot's group, plus any `target_resource_group_ids`. Each definition's only assignable scope is that group, so the role cannot be granted across the subscription. The actions are the same list below.
 
 The role is the first gate. The resource allowlist in config is the second. A permission the role has is still unused until a resource lists that action and dry run is off.
 
@@ -48,6 +50,6 @@ The custom role's assignable scope is the bot's resource group. If the Log Analy
 
 ## What the bot does not receive
 
-No Key Vault secrets are required for Azure data-plane access. The webhook token is a container app secret parameter, injected as `HEALBOT_WEBHOOK_TOKEN`. Azure OpenAI, when enabled, uses the same managed identity (`https://cognitiveservices.azure.com/.default`) unless `AZURE_OPENAI_API_KEY` is set. Prefer the identity. The OpenAI resource still needs a **Cognitive Services OpenAI User** assignment, which the Bicep does not grant because the account may be in another group.
+No Key Vault secrets are required for Azure data-plane access. The webhook token is injected as `HEALBOT_WEBHOOK_TOKEN`. The Bicep template passes it as a container app secret. Terraform generates it, stores it in Key Vault, and references that secret from the app. Azure OpenAI, when enabled, uses the same managed identity (`https://cognitiveservices.azure.com/.default`) unless `AZURE_OPENAI_API_KEY` is set. Prefer the identity. The OpenAI resource still needs a **Cognitive Services OpenAI User** assignment, which neither deployment grants, because the account may be in another group.
 
 GitHub and Azure DevOps tokens are git credentials, not Azure RBAC. Pass them as container app secrets. The demo uses the mock provider and needs neither.

@@ -66,7 +66,11 @@ th { color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: 0.0
 .card h2 { margin: 0 0 8px; font-size: 14px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
 pre { white-space: pre-wrap; word-break: break-word; font: 12px/1.45 ui-monospace, monospace; background: var(--panel-2); padding: 10px; margin: 0; }
 .muted { color: var(--muted); }
-.row { display: flex; gap: 8px; flex-wrap: wrap; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+input.token {
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+  padding: 8px 10px; font: inherit; min-width: 10rem;
+}
 @media (max-width: 800px) {
   header, .banner, .grid { display: block; }
   nav, .pills { margin-top: 10px; }
@@ -102,18 +106,18 @@ pre { white-space: pre-wrap; word-break: break-word; font: 12px/1.45 ui-monospac
     <div class="row">
       {{if eq .Mode "demo"}}
       <form method="post" action="/v1/demo/scenario">
-        <input type="hidden" name="token" value="{{.AdminToken}}">
+        {{template "adminField" .}}
         <button type="submit">Run example-api scenario</button>
       </form>
       {{end}}
       {{if .Killed}}
       <form method="post" action="/v1/control/resume">
-        <input type="hidden" name="token" value="{{.AdminToken}}">
+        {{template "adminField" .}}
         <button class="quiet" type="submit">Release kill switch</button>
       </form>
       {{else}}
       <form method="post" action="/v1/control/kill">
-        <input type="hidden" name="token" value="{{.AdminToken}}">
+        {{template "adminField" .}}
         <button class="quiet" type="submit">Engage kill switch</button>
       </form>
       {{end}}
@@ -124,7 +128,7 @@ pre { white-space: pre-wrap; word-break: break-word; font: 12px/1.45 ui-monospac
   <table>
     <thead><tr><th>Severity</th><th>Incident</th><th>Count</th><th>Tier</th><th>Status</th><th>Seen</th></tr></thead>
     <tbody>
-    {{if not .Incidents}}<tr><td colspan="6" class="muted">No open incidents. Run the example-api scenario to watch a null dereference move from diagnosis to a dry-run slot swap to a pull request.</td></tr>{{end}}
+    {{if not .Incidents}}<tr><td colspan="6" class="muted">{{if eq .Mode "demo"}}No open incidents. Run the example-api scenario to watch a null dereference move from diagnosis to a dry-run slot swap to a pull request.{{else}}No open incidents. Alerts arrive on /v1/ingest/monitor. Resources that are not allowlisted stay at tier 1.{{end}}</td></tr>{{end}}
     {{range .Incidents}}
       <tr>
         <td class="sev sev-{{sevn .Severity}}">{{sev .Severity}}</td>
@@ -181,7 +185,7 @@ pre { white-space: pre-wrap; word-break: break-word; font: 12px/1.45 ui-monospac
         {{end}}
       </div>
       <form method="post" action="/v1/incidents/{{.Incident.ID}}/suppress">
-        <input type="hidden" name="token" value="{{.AdminToken}}">
+        {{template "adminField" .}}
         <button class="quiet" type="submit">Suppress automation</button>
       </form>
     </div>
@@ -220,4 +224,6 @@ pre { white-space: pre-wrap; word-break: break-word; font: 12px/1.45 ui-monospac
 </main>
 </body>
 </html>
+
+{{define "adminField"}}{{if eq .Mode "demo"}}<input type="hidden" name="token" value="{{.AdminToken}}">{{else}}<input class="token" type="password" name="token" placeholder="Admin token" autocomplete="off" aria-label="Admin token">{{end}}{{end}}
 `

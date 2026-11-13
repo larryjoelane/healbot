@@ -49,6 +49,7 @@ Unknown resources are capped at tier 1. Global `dry_run: true` cannot be overrid
 
 | Variable | Effect |
 | --- | --- |
+| `HEALBOT_CONFIG` | Config file path. Overrides `-config`. App Service sets `/config.azure.yaml` |
 | `HEALBOT_ADDR` | Listen address |
 | `HEALBOT_MODE` | `demo` or `azure` |
 | `HEALBOT_DRY_RUN` | `true` forces dry run |
@@ -110,6 +111,8 @@ The template creates:
 
 The app starts in dry run. Attach an existing alert to the action group. Flip `HEALBOT_DRY_RUN` to `false` and set a resource's `dry_run: false` only after `health_url` is set. Role details are in [docs/rbac.md](docs/rbac.md).
 
+For a Linux App Service sandbox, use [deploy/terraform](deploy/terraform/README.md). That stack defaults to App Service, can also target Container Apps, and keeps the same role and the same dry-run ceiling. The Bicep file remains the Container Apps-only template.
+
 ## Develop
 
 ```bash
@@ -131,7 +134,8 @@ internal/pipeline  tier loop
 internal/remediate runbooks
 internal/fix       pull requests (mock, GitHub, Azure DevOps)
 internal/azure     DefaultAzureCredential adapters
-deploy/main.bicep  the bot, the role, the action group
+deploy/main.bicep    Container Apps, the role, the action group
+deploy/terraform    App Service by default, or Container Apps
 ```
 
 ## Implemented and intentionally absent
