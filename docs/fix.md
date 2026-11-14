@@ -172,7 +172,7 @@ Environment overrides: `HEALBOT_FIX_MODE`, `HEALBOT_FIX_AGENT`, `HEALBOT_FIX_ASS
 
 ## App settings
 
-`deploy/main.bicep` on `main` does not set these variables. Pull request #2 adds Terraform for App Service and is not merged; its app settings do not include them either. After that change lands, add the `HEALBOT_FIX_*` names above as application settings if you need a mode other than the default. Unset, or `HEALBOT_FIX_MODE=template`, keeps the safe behavior. Do not store `GITHUB_TOKEN` in the YAML file. Inject it as a secret reference the same way the webhook token is injected.
+`deploy/main.bicep` and the Terraform roots under `deploy/terraform/` do not set these variables. Unset, or `HEALBOT_FIX_MODE=template`, keeps the safe behavior. Do not store `GITHUB_TOKEN` in the YAML file.
 
 ## Audit
 

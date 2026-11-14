@@ -41,7 +41,7 @@ Slot swap and process restart apply to `Microsoft.Web/sites`. Revision restart a
 
 When Healbot itself runs on App Service there is still no revision of Healbot to roll back. Replace the image, or add a deployment slot outside this stack and swap it. The runbooks keep targeting the resources named in the alert, which can be App Service apps or Container Apps. Health for an App Service target stays `unverified` until that resource sets `health_url`.
 
-`deploy/terraform` starts the process with `dry_run` true and an empty resource list, so unknown resources stay at tier 1. The in-product demo scenario is refused in azure mode. Post a common-alert payload to verify the path, as the Terraform README describes.
+Both Terraform roots, `deploy/terraform/app-service` and `deploy/terraform/container-apps`, start the process with `dry_run` true and an empty resource list, so unknown resources stay at tier 1. The in-product demo scenario is refused in azure mode. Post a common-alert payload to verify the path, as the root README describes.
 
 ## Network
 

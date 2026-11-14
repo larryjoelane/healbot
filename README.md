@@ -69,9 +69,9 @@ Unknown resources are capped at tier 1. Global `dry_run: true` cannot be overrid
 | `HEALBOT_FIX_LABELS` | Comma-separated issue labels |
 | `HEALBOT_FIX_BASE_BRANCH` | Branch the Copilot agent starts from |
 
-`mode: azure` uses `azidentity.NewDefaultAzureCredential`. In Azure that is the container app's system-assigned managed identity. Locally it is the Azure CLI session. Healbot does not read a client secret from code.
+`mode: azure` uses `azidentity.NewDefaultAzureCredential`. The Terraform roots set `AZURE_CLIENT_ID` on a user-assigned identity. The Bicep container app uses its system-assigned identity. Locally the credential is the Azure CLI session. Healbot does not read a client secret from code.
 
-`deploy/main.bicep` does not set the `HEALBOT_FIX_*` variables. Leave them unset to keep `template`. An open Terraform change (pull request #2, branch `cursor/azure-appservice-terraform-4121`) is not on `main` and does not define them either. When that stack is merged, add the same variables as app settings if you want a mode other than `template`. The names are listed in [docs/fix.md](docs/fix.md).
+`deploy/main.bicep` and both Terraform roots leave `HEALBOT_FIX_*` unset. That keeps tier 3 on `template`. The names are listed in [docs/fix.md](docs/fix.md).
 
 ## Ingest
 
@@ -121,7 +121,7 @@ The template creates:
 
 The app starts in dry run. Attach an existing alert to the action group. Flip `HEALBOT_DRY_RUN` to `false` and set a resource's `dry_run: false` only after `health_url` is set. Role details are in [docs/rbac.md](docs/rbac.md).
 
-For a Linux App Service sandbox, use [deploy/terraform](deploy/terraform/README.md). That stack defaults to App Service, can also target Container Apps, and keeps the same role and the same dry-run ceiling. The Bicep file remains the Container Apps-only template.
+For a sandbox, pick one Terraform root. [App Service](deploy/terraform/app-service/README.md) is the Linux custom-container path. [Container Apps](deploy/terraform/container-apps/README.md) is the other. They share the Healbot Operator role and the dry-run ceiling. The Bicep file remains a Container Apps-only template. See [deploy/terraform/README.md](deploy/terraform/README.md).
 
 ## Develop
 
@@ -144,8 +144,9 @@ internal/pipeline  tier loop
 internal/remediate runbooks
 internal/fix       tier-3 modes (template, model patch, issue)
 internal/azure     DefaultAzureCredential adapters
-deploy/main.bicep    Container Apps, the role, the action group
-deploy/terraform    App Service by default, or Container Apps
+deploy/main.bicep                 Container Apps template, the role, the action group
+deploy/terraform/app-service      App Service root
+deploy/terraform/container-apps   Container Apps root
 ```
 
 ## Implemented and intentionally absent
