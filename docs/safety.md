@@ -21,7 +21,11 @@ The executor writes the concrete plan ("swap slot staging with production on exa
 
 ## What tier 3 will not do
 
-The pull-request body says Healbot does not merge. The GitHub and Azure DevOps clients expose `Create` only. Tests fail if a request path contains `merge`. The proposed files are a starting point for the service owner, generated from the stack frame, not a claim that the patch compiled in that repository.
+The pull-request body says Healbot does not merge. The GitHub and Azure DevOps clients expose create, read, and issue assignment. They have no merge method, and a test fails if a function name or a request path contains one. The default mode, `template`, still builds the patch from the stack frame.
+
+`model_patch` asks the configured model for a patch and a regression test. Before anything is pushed, Healbot rejects paths outside the allowlist, plus CI workflows, secret files, infrastructure, lockfiles, binaries, diffs that are not full files, and text that contains an obvious token. A rejected or failed model call falls back to the template pull request and records `fix.fallback`. `wait_for_ci` can label the pull request after the head status settles. It does not merge.
+
+`issue` (also accepted as `copilot_issue`) opens a GitHub issue and does not open a pull request. The assignee is configurable: the Copilot coding agent, a `@claude` mention and comment for a Claude Code GitHub Action, or neither. Details and token permissions are in [fix.md](fix.md).
 
 ## Queue consumers
 
@@ -29,7 +33,7 @@ The pull-request body says Healbot does not merge. The GitHub and Azure DevOps c
 
 ## Audit
 
-Decision events are appended as JSONL when `audit.path` is set, and kept in a ring buffer for `GET /v1/audit`. Kinds include `incident.opened`, `diagnosis.completed`, `policy.decision`, `remediation.dry_run`, `remediation.blocked`, `verification.result`, `pr.opened`, `kill_switch.changed`, and `automation.blocked`.
+Decision events are appended as JSONL when `audit.path` is set, and kept in a ring buffer for `GET /v1/audit`. Kinds include `incident.opened`, `diagnosis.completed`, `policy.decision`, `remediation.dry_run`, `remediation.blocked`, `verification.result`, `pr.opened`, `issue.opened`, `fix.fallback`, `fix.warning`, `fix.ci`, `kill_switch.changed`, and `automation.blocked`.
 
 ## App Service and Container Apps
 

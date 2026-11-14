@@ -1,12 +1,9 @@
 package fix
 
 import (
-	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -60,8 +57,12 @@ func (a *AzureDevOps) Create(ctx context.Context, draft Draft) (model.PullReques
 	changes := make([]map[string]any, 0, len(draft.Files))
 	for _, f := range draft.Files {
 		path := "/" + strings.TrimPrefix(f.Path, "/")
+		change := "add"
+		if f.Update {
+			change = "edit"
+		}
 		changes = append(changes, map[string]any{
-			"changeType": "add",
+			"changeType": change,
 			"item":       map[string]string{"path": path},
 			"newContent": map[string]string{"content": f.Content, "contentType": "rawtext"},
 		})
@@ -114,38 +115,12 @@ func (a *AzureDevOps) repo() string {
 }
 
 func (a *AzureDevOps) do(ctx context.Context, method, path string, in any, out any) error {
-	var body io.Reader
-	if in != nil {
-		b, err := json.Marshal(in)
-		if err != nil {
-			return err
-		}
-		body = bytes.NewReader(b)
-	}
-	req, err := http.NewRequestWithContext(ctx, method, a.base()+path, body)
+	code, raw, err := a.raw(ctx, method, path, in)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "healbot")
-	if in != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	if a.Token != "" {
-		req.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(":"+a.Token)))
-	}
-	client := a.HTTP
-	if client == nil {
-		client = http.DefaultClient
-	}
-	res, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer res.Body.Close()
-	raw, _ := io.ReadAll(io.LimitReader(res.Body, 2<<20))
-	if res.StatusCode >= 300 {
-		return fmt.Errorf("azure devops %s %s: status %d", method, path, res.StatusCode)
+	if code >= 300 {
+		return fmt.Errorf("azure devops %s %s: status %d", method, path, code)
 	}
 	if out != nil && len(raw) > 0 {
 		if err := json.Unmarshal(raw, out); err != nil {

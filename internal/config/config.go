@@ -28,6 +28,7 @@ type Config struct {
 	Notify     Notify     `yaml:"notify"`
 	LLM        LLM        `yaml:"llm"`
 	Repo       Repo       `yaml:"repo"`
+	Fix        Fix        `yaml:"fix"`
 	Poller     Poller     `yaml:"poller"`
 }
 
@@ -103,6 +104,55 @@ type Resource struct {
 	KnownGoodRevision  string   `yaml:"known_good_revision"`
 	ConsumerResourceID string   `yaml:"consumer_resource_id"`
 	HealthURL          string   `yaml:"health_url"`
+	// FixMode overrides fix.mode for this resource when set.
+	// Empty inherits the process mode. FixAgent overrides fix.issue.agent.
+	FixMode  string `yaml:"fix_mode"`
+	FixAgent string `yaml:"fix_agent"`
+}
+
+// Fix mode names. copilot_issue is an alias of issue.
+const (
+	FixModeTemplate   = "template"
+	FixModeModelPatch = "model_patch"
+	FixModeIssue      = "issue"
+
+	FixAgentCopilot = "copilot"
+	FixAgentClaude  = "claude"
+	FixAgentNone    = "none"
+)
+
+// Fix configures tier 3. The default mode is template.
+type Fix struct {
+	Mode                string        `yaml:"mode"`
+	MaxFiles            int           `yaml:"max_files"`
+	MaxFileBytes        int           `yaml:"max_file_bytes"`
+	MaxPatchBytes       int           `yaml:"max_patch_bytes"`
+	MaxPromptBytes      int           `yaml:"max_prompt_bytes"`
+	MaxInstructionBytes int           `yaml:"max_instruction_bytes"`
+	ContextFiles        int           `yaml:"context_files"`
+	WaitForCI           bool          `yaml:"wait_for_ci"`
+	CITimeout           time.Duration `yaml:"-"`
+	CITimeoutRaw        string        `yaml:"ci_timeout"`
+	CIPoll              time.Duration `yaml:"-"`
+	CIPollRaw           string        `yaml:"ci_poll"`
+	SuccessLabel        string        `yaml:"success_label"`
+	FailureLabel        string        `yaml:"failure_label"`
+	AllowPaths          []string      `yaml:"allow_paths"`
+	ExtraDenyPaths      []string      `yaml:"extra_deny_paths"`
+	AllowDeniedPaths    []string      `yaml:"allow_denied_paths"`
+	InstructionPaths    []string      `yaml:"instruction_paths"`
+	Issue               FixIssue      `yaml:"issue"`
+}
+
+// FixIssue configures the agent-neutral issue mode.
+type FixIssue struct {
+	Agent              string   `yaml:"agent"`
+	Assignee           string   `yaml:"assignee"`
+	Mention            string   `yaml:"mention"`
+	Labels             []string `yaml:"labels"`
+	BaseBranch         string   `yaml:"base_branch"`
+	CustomAgent        string   `yaml:"custom_agent"`
+	CustomInstructions string   `yaml:"custom_instructions"`
 }
 
 // Notify configures outbound channels. All of them implement one interface.
@@ -273,6 +323,7 @@ func Demo() Config {
 			GitHub:   GitHubRepo{TokenEnv: "GITHUB_TOKEN"},
 			AzDO:     AzDORepo{TokenEnv: "AZDO_TOKEN"},
 		},
+		Fix: Fix{Mode: FixModeTemplate},
 		Poller: Poller{
 			Enabled:  false,
 			Every:    "1m",
@@ -351,6 +402,7 @@ func (c *Config) applyDefaults() {
 	if c.Repo.Provider == "" {
 		c.Repo.Provider = "mock"
 	}
+	c.Fix = c.Fix.Normalized()
 	c.Safety.Cooldown = mustDuration(c.Safety.CooldownRaw, 10*time.Minute)
 	c.Safety.BreakerOpenFor = mustDuration(c.Safety.BreakerOpenRaw, 30*time.Minute)
 	c.Escalation.DeployWindow = mustDuration(c.Escalation.DeployWindowRaw, 2*time.Hour)
@@ -404,6 +456,33 @@ func (c *Config) applyEnv() {
 	if v := os.Getenv("HEALBOT_LLM_PROVIDER"); v != "" {
 		c.LLM.Provider = v
 	}
+	if v := os.Getenv("HEALBOT_FIX_MODE"); v != "" {
+		c.Fix.Mode = v
+	}
+	if v := os.Getenv("HEALBOT_FIX_AGENT"); v != "" {
+		c.Fix.Issue.Agent = v
+	}
+	if v := os.Getenv("HEALBOT_FIX_ASSIGNEE"); v != "" {
+		c.Fix.Issue.Assignee = v
+	}
+	if v := os.Getenv("HEALBOT_FIX_MENTION"); v != "" {
+		c.Fix.Issue.Mention = v
+	}
+	if v := os.Getenv("HEALBOT_FIX_CUSTOM_AGENT"); v != "" {
+		c.Fix.Issue.CustomAgent = v
+	}
+	if v := os.Getenv("HEALBOT_FIX_BASE_BRANCH"); v != "" {
+		c.Fix.Issue.BaseBranch = v
+	}
+	if v := os.Getenv("HEALBOT_FIX_WAIT_CI"); v != "" {
+		c.Fix.WaitForCI = strings.EqualFold(v, "true") || v == "1"
+	}
+	if v := os.Getenv("HEALBOT_FIX_LABELS"); v != "" {
+		c.Fix.Issue.Labels = splitList(v)
+	}
+	if v := os.Getenv("HEALBOT_FIX_ALLOW_DENIED"); v != "" {
+		c.Fix.AllowDeniedPaths = append(c.Fix.AllowDeniedPaths, splitList(v)...)
+	}
 }
 
 func (c Config) validate() error {
@@ -418,6 +497,12 @@ func (c Config) validate() error {
 	if c.Mode == "azure" && (c.Server.WebhookToken == demoWebhookToken || c.Server.AdminToken == demoWebhookToken) {
 		return fmt.Errorf("config: %q is a demo-only placeholder and is rejected in azure mode; set HEALBOT_WEBHOOK_TOKEN and HEALBOT_ADMIN_TOKEN", demoWebhookToken)
 	}
+	if _, err := NormalizeFixMode(c.Fix.Mode); err != nil {
+		return fmt.Errorf("config: %w", err)
+	}
+	if _, err := NormalizeFixAgent(c.Fix.Issue.Agent); err != nil {
+		return fmt.Errorf("config: %w", err)
+	}
 	for _, r := range c.Resources {
 		if r.MaxTier < 1 || r.MaxTier > 3 {
 			return fmt.Errorf("config: resource %s max_tier must be 1, 2, or 3", r.ID)
@@ -425,6 +510,16 @@ func (c Config) validate() error {
 		for _, a := range r.AllowedActions {
 			if !model.ActionKind(a).Valid() {
 				return fmt.Errorf("config: resource %s has unknown action %q", r.ID, a)
+			}
+		}
+		if r.FixMode != "" {
+			if _, err := NormalizeFixMode(r.FixMode); err != nil {
+				return fmt.Errorf("config: resource %s: %w", r.ID, err)
+			}
+		}
+		if r.FixAgent != "" {
+			if _, err := NormalizeFixAgent(r.FixAgent); err != nil {
+				return fmt.Errorf("config: resource %s: %w", r.ID, err)
 			}
 		}
 	}
@@ -459,6 +554,119 @@ func (c Config) EffectiveDryRun(res Resource) bool {
 		return true
 	}
 	return *res.DryRun
+}
+
+// NormalizeFixMode accepts template, model_patch, and issue.
+// copilot_issue is an alias of issue. Empty means template.
+func NormalizeFixMode(s string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "", FixModeTemplate:
+		return FixModeTemplate, nil
+	case FixModeModelPatch, "model-patch":
+		return FixModeModelPatch, nil
+	case FixModeIssue, "copilot_issue", "copilot-issue":
+		return FixModeIssue, nil
+	default:
+		return "", fmt.Errorf("fix mode must be template, model_patch, or issue (copilot_issue is an alias), got %q", s)
+	}
+}
+
+// NormalizeFixAgent accepts copilot, claude, and none. Empty means copilot.
+func NormalizeFixAgent(s string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "", FixAgentCopilot:
+		return FixAgentCopilot, nil
+	case FixAgentClaude:
+		return FixAgentClaude, nil
+	case FixAgentNone, "off":
+		return FixAgentNone, nil
+	default:
+		return "", fmt.Errorf("fix issue agent must be copilot, claude, or none, got %q", s)
+	}
+}
+
+// Normalized fills the safe defaults for a tier-3 config.
+// A non-zero duration is kept when the raw string was left empty.
+func (f Fix) Normalized() Fix {
+	if strings.TrimSpace(f.Mode) == "" {
+		f.Mode = FixModeTemplate
+	}
+	if f.MaxFiles < 1 {
+		f.MaxFiles = 6
+	}
+	if f.MaxFiles > 20 {
+		f.MaxFiles = 20
+	}
+	if f.MaxFileBytes < 1 {
+		f.MaxFileBytes = 24_000
+	}
+	if f.MaxFileBytes > 200_000 {
+		f.MaxFileBytes = 200_000
+	}
+	if f.MaxPatchBytes < 1 {
+		f.MaxPatchBytes = 64_000
+	}
+	if f.MaxPatchBytes > 500_000 {
+		f.MaxPatchBytes = 500_000
+	}
+	if f.MaxPromptBytes < 1 {
+		f.MaxPromptBytes = 48_000
+	}
+	if f.MaxPromptBytes > 200_000 {
+		f.MaxPromptBytes = 200_000
+	}
+	if f.MaxInstructionBytes < 1 {
+		f.MaxInstructionBytes = 12_000
+	}
+	if f.MaxInstructionBytes > 48_000 {
+		f.MaxInstructionBytes = 48_000
+	}
+	if f.ContextFiles < 1 {
+		f.ContextFiles = 4
+	}
+	if f.ContextFiles > 20 {
+		f.ContextFiles = 20
+	}
+	if f.CITimeout == 0 {
+		if f.CITimeoutRaw == "" {
+			f.CITimeoutRaw = "2m"
+		}
+		f.CITimeout = mustDuration(f.CITimeoutRaw, 2*time.Minute)
+	}
+	if f.CIPoll == 0 {
+		if f.CIPollRaw == "" {
+			f.CIPollRaw = "5s"
+		}
+		f.CIPoll = mustDuration(f.CIPollRaw, 5*time.Second)
+	}
+	if f.SuccessLabel == "" {
+		f.SuccessLabel = "healbot:ci-passed"
+	}
+	if f.FailureLabel == "" {
+		f.FailureLabel = "healbot:ci-failed"
+	}
+	if strings.TrimSpace(f.Issue.Agent) == "" {
+		f.Issue.Agent = FixAgentCopilot
+	}
+	if f.Issue.Assignee == "" {
+		f.Issue.Assignee = "copilot-swe-agent[bot]"
+	}
+	if f.Issue.Mention == "" {
+		f.Issue.Mention = "@claude"
+	}
+	return f
+}
+
+func splitList(v string) []string {
+	parts := strings.Split(v, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func boolPtr(v bool) *bool { return &v }

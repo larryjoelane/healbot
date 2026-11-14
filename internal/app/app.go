@@ -96,7 +96,8 @@ func Build(cfg config.Config) (*App, error) {
 		provider = mem
 	}
 	var diag diagnose.Diagnoser = diagnose.Heuristic{}
-	if cfg.LLM.Provider == "azure_openai" && cfg.LLM.Endpoint != "" && cfg.LLM.Deployment != "" {
+	var model fix.Completer
+	if cfg.Mode != "demo" && cfg.LLM.Provider == "azure_openai" && cfg.LLM.Endpoint != "" && cfg.LLM.Deployment != "" {
 		llm := &diagnose.AzureOpenAI{
 			Endpoint:   cfg.LLM.Endpoint,
 			Deployment: cfg.LLM.Deployment,
@@ -107,6 +108,10 @@ func Build(cfg config.Config) (*App, error) {
 			llm.Cred = cred
 		}
 		diag = diagnose.Service{LLM: llm}
+		model = llm
+	}
+	if cfg.Mode == "demo" {
+		model = fix.DemoModel{}
 	}
 	exec := &remediate.Executor{
 		RT: rt, Gate: gate, Audit: log, Now: time.Now,
@@ -130,7 +135,7 @@ func Build(cfg config.Config) (*App, error) {
 		Gather:   diagnose.Gatherer{RT: rt, Window: cfg.Escalation.DeployWindow, Now: time.Now},
 		Diagnose: diag,
 		Exec:     exec,
-		Fix:      fix.Service{Provider: provider},
+		Fix:      fixService(provider, model, cfg.Fix),
 		Notify:   channels(cfg),
 		DryRun:   cfg.EffectiveDryRun,
 		Now:      time.Now,
@@ -191,6 +196,26 @@ func channels(cfg config.Config) []notify.Delivery {
 	}
 	return out
 }
+
+func fixService(provider fix.Provider, model fix.Completer, settings config.Fix) fix.Service {
+	svc := fix.Service{Provider: provider, Model: model, Fix: settings}
+	switch p := provider.(type) {
+	case *fix.GitHub:
+		svc.Source = p
+		svc.Issues = p
+		svc.CI = p
+	case *fix.AzureDevOps:
+		svc.Source = p
+	case *fix.Memory:
+		svc.Source = p
+		svc.Issues = p
+		svc.CI = p
+	}
+	return svc
+}
+
+// Azure OpenAI is the production Completer. Demo mode uses fix.DemoModel instead.
+var _ fix.Completer = (*diagnose.AzureOpenAI)(nil)
 
 func envOr(name, fallback string) string {
 	if name == "" {

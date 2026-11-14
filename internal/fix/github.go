@@ -1,12 +1,10 @@
 package fix
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -62,14 +60,33 @@ func (g *GitHub) Create(ctx context.Context, draft Draft) (model.PullRequestRef,
 	}, nil); err != nil {
 		return model.PullRequestRef{}, err
 	}
+	var headSHA string
 	for _, f := range draft.Files {
 		path := strings.TrimPrefix(f.Path, "/")
-		if err := g.do(ctx, http.MethodPut, g.repo()+"/contents/"+path, map[string]string{
+		payload := map[string]string{
 			"message": draft.Title,
 			"content": base64.StdEncoding.EncodeToString([]byte(f.Content)),
 			"branch":  branch,
-		}, nil); err != nil {
+		}
+		if f.Update {
+			sha, found, err := g.blobSHA(ctx, path, branch)
+			if err != nil {
+				return model.PullRequestRef{}, err
+			}
+			if found {
+				payload["sha"] = sha
+			}
+		}
+		var written struct {
+			Commit struct {
+				SHA string `json:"sha"`
+			} `json:"commit"`
+		}
+		if err := g.do(ctx, http.MethodPut, g.repo()+"/contents/"+path, payload, &written); err != nil {
 			return model.PullRequestRef{}, err
+		}
+		if written.Commit.SHA != "" {
+			headSHA = written.Commit.SHA
 		}
 	}
 	var pr ghPR
@@ -91,6 +108,7 @@ func (g *GitHub) Create(ctx context.Context, draft Draft) (model.PullRequestRef,
 		URL:      html,
 		Title:    draft.Title,
 		Branch:   branch,
+		SHA:      headSHA,
 	}, nil
 }
 
@@ -99,42 +117,12 @@ func (g *GitHub) repo() string {
 }
 
 func (g *GitHub) do(ctx context.Context, method, path string, in any, out any) error {
-	var body io.Reader
-	if in != nil {
-		b, err := json.Marshal(in)
-		if err != nil {
-			return err
-		}
-		body = bytes.NewReader(b)
-	}
-	base := g.BaseURL
-	if base == "" {
-		base = "https://api.github.com"
-	}
-	req, err := http.NewRequestWithContext(ctx, method, strings.TrimRight(base, "/")+path, body)
+	code, raw, err := g.raw(ctx, method, path, in, nil)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "healbot")
-	if in != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	if g.Token != "" {
-		req.Header.Set("Authorization", "Bearer "+g.Token)
-	}
-	client := g.HTTP
-	if client == nil {
-		client = http.DefaultClient
-	}
-	res, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer res.Body.Close()
-	raw, _ := io.ReadAll(io.LimitReader(res.Body, 2<<20))
-	if res.StatusCode >= 300 {
-		return fmt.Errorf("github %s %s: status %d", method, path, res.StatusCode)
+	if code >= 300 {
+		return fmt.Errorf("github %s %s: status %d", method, path, code)
 	}
 	if out != nil && len(raw) > 0 {
 		if err := json.Unmarshal(raw, out); err != nil {

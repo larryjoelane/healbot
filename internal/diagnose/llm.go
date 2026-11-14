@@ -126,6 +126,9 @@ type AzureOpenAI struct {
 }
 
 // Complete returns the assistant text.
+// Diagnosis and tier-3 model_patch share this method. The provider is the
+// Azure OpenAI deployment configured on the process; other Completer
+// implementations can be wired in without changing the HTTP client.
 func (a *AzureOpenAI) Complete(ctx context.Context, system, user string) (string, error) {
 	if a.Endpoint == "" || a.Deployment == "" {
 		return "", fmt.Errorf("azure openai endpoint and deployment are required")
