@@ -15,6 +15,9 @@ azure:
   workspace_id: ""    # Log Analytics workspace GUID, optional
 
 audit:
+  # The container image creates /var/lib/healbot and owns it as uid 65532.
+  # On App Service this file lives on the container disk and is lost when the
+  # container is replaced. GET /v1/audit still serves the in-memory ring.
   path: /var/lib/healbot/audit.jsonl
   sync: false
   max_memory: 5000
@@ -30,7 +33,9 @@ escalation:
   notify_counts: [1, 10, 50, 100]
 
 resources: []
-  # - id: /subscriptions/.../providers/Microsoft.Web/sites/api
+  # Empty means every resource is tier 1. A live action needs an entry here
+  # with dry_run: false and an allowlist, plus HEALBOT_DRY_RUN=false.
+  # - id: /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/example-rg/providers/Microsoft.Web/sites/api
   #   max_tier: 2
   #   dry_run: false
   #   allowed_actions: [restart, slot_swap]

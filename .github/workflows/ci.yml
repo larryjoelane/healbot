@@ -35,3 +35,27 @@ jobs:
         with:
           version: v2.15.0
           args: --timeout=5m
+
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.13.3"
+      - name: Format
+        run: terraform fmt -check -recursive
+      - name: Init
+        working-directory: deploy/terraform
+        run: terraform init -backend=false -input=false
+      - name: Validate
+        working-directory: deploy/terraform
+        run: terraform validate
+      - uses: terraform-linters/setup-tflint@v6
+        with:
+          tflint_version: v0.66.0
+      - name: TFLint
+        working-directory: deploy/terraform
+        run: |
+          tflint --init
+          tflint --recursive

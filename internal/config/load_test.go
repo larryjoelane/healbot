@@ -6,6 +6,20 @@ import (
 	"testing"
 )
 
+func TestConfigFile(t *testing.T) {
+	t.Setenv("HEALBOT_CONFIG", "")
+	if ConfigFile("/config.demo.yaml") != "/config.demo.yaml" {
+		t.Fatalf("flag path %q", ConfigFile("/config.demo.yaml"))
+	}
+	if ConfigFile("") != "config.demo.yaml" {
+		t.Fatalf("empty flag %q", ConfigFile(""))
+	}
+	t.Setenv("HEALBOT_CONFIG", "/config.azure.yaml")
+	if ConfigFile("/config.demo.yaml") != "/config.azure.yaml" {
+		t.Fatalf("env override %q", ConfigFile("/config.demo.yaml"))
+	}
+}
+
 func TestDemoFileLoads(t *testing.T) {
 	t.Setenv("HEALBOT_MODE", "")
 	t.Setenv("HEALBOT_DRY_RUN", "")

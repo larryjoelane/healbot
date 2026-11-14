@@ -188,6 +188,18 @@ const DemoResourceID = "/subscriptions/00000000-0000-0000-0000-000000000000/reso
 // DemoCapacityID is a second demo resource that should only scale, not open a PR.
 const DemoCapacityID = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/example-rg/providers/Microsoft.Web/sites/example-worker"
 
+// ConfigFile chooses the YAML path. HEALBOT_CONFIG wins over -config so a
+// host can select /config.azure.yaml without replacing the image command.
+func ConfigFile(flagValue string) string {
+	if v := os.Getenv("HEALBOT_CONFIG"); v != "" {
+		return v
+	}
+	if flagValue != "" {
+		return flagValue
+	}
+	return "config.demo.yaml"
+}
+
 // Load reads YAML and applies environment overrides.
 // An empty path uses Demo. If environment overrides then leave demo mode
 // without setting HEALBOT_WEBHOOK_TOKEN, the demo placeholder is cleared

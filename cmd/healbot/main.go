@@ -13,9 +13,9 @@ import (
 )
 
 func main() {
-	path := flag.String("config", "config.demo.yaml", "path to the YAML config")
+	path := flag.String("config", "config.demo.yaml", "path to the YAML config; HEALBOT_CONFIG overrides it")
 	flag.Parse()
-	cfg, err := config.Load(*path)
+	cfg, err := config.Load(config.ConfigFile(*path))
 	if err != nil {
 		slog.Error("config", "err", err)
 		os.Exit(1)

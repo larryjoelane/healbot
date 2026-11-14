@@ -1,3 +1,5 @@
+// Container Apps deployment. App Service (the default) and an optional
+// Container Apps path live in deploy/terraform.
 targetScope = 'resourceGroup'
 
 @description('Region for the Container Apps environment.')
