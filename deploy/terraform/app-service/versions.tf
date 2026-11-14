@@ -6,14 +6,6 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "~> 4.0"
     }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.6"
-    }
-    time = {
-      source  = "hashicorp/time"
-      version = "~> 0.12"
-    }
   }
 
   # Remote state is optional. Create the storage account outside this
@@ -25,7 +17,7 @@ terraform {
   #   resource_group_name  = "example-tfstate-rg"
   #   storage_account_name = "exampletfstate000"
   #   container_name       = "tfstate"
-  #   key                  = "healbot.tfstate"
+  #   key                  = "healbot-app-service.tfstate"
   # }
 }
 

@@ -1,8 +1,8 @@
 # Least-privilege RBAC
 
-Healbot's identity is a managed identity. `deploy/main.bicep` uses the system-assigned identity on the container app. `deploy/terraform` uses a user-assigned identity so Key Vault and registry grants exist before the app starts, and sets `AZURE_CLIENT_ID` so `DefaultAzureCredential` selects it. Both create a custom role, **Healbot Operator**, and assign it to that identity.
+Healbot's identity is a managed identity. `deploy/main.bicep` uses the system-assigned identity on the container app. The Terraform roots `deploy/terraform/app-service` and `deploy/terraform/container-apps` use a user-assigned identity so Key Vault and registry grants exist before the app starts, and set `AZURE_CLIENT_ID` so `DefaultAzureCredential` selects it. Each creates a custom role, **Healbot Operator**, and assigns it to that identity.
 
-The Bicep role is defined on the bot's resource group. Terraform defines one role per operator scope: the bot's group, plus any `target_resource_group_ids`. Each definition's only assignable scope is that group, so the role cannot be granted across the subscription. The actions are the same list below.
+The Bicep role is defined on the bot's resource group. Each Terraform root defines one role per operator scope: the bot's group, plus any `target_resource_group_ids`. Each definition's only assignable scope is that group, so the role cannot be granted across the subscription. The actions are the same list below.
 
 The role is the first gate. The resource allowlist in config is the second. A permission the role has is still unused until a resource lists that action and dry run is off.
 

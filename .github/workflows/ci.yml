@@ -44,18 +44,21 @@ jobs:
         with:
           terraform_version: "1.13.3"
       - name: Format
-        run: terraform fmt -check -recursive
-      - name: Init
-        working-directory: deploy/terraform
-        run: terraform init -backend=false -input=false
-      - name: Validate
-        working-directory: deploy/terraform
-        run: terraform validate
+        run: terraform fmt -check -recursive deploy/terraform
+      - name: Init and validate
+        run: |
+          set -euo pipefail
+          for dir in deploy/terraform/app-service deploy/terraform/container-apps; do
+            terraform -chdir="$dir" init -backend=false -input=false
+            terraform -chdir="$dir" validate
+          done
       - uses: terraform-linters/setup-tflint@v6
         with:
           tflint_version: v0.66.0
       - name: TFLint
-        working-directory: deploy/terraform
         run: |
-          tflint --init
-          tflint --recursive
+          set -euo pipefail
+          for dir in deploy/terraform/app-service deploy/terraform/container-apps; do
+            tflint --init --chdir="$dir"
+            tflint --chdir="$dir"
+          done

@@ -4,7 +4,6 @@
 
 name     = "healbot"
 location = "eastus"
-hosting  = "app_service"
 
 # Full image reference when create_container_registry is false.
 # When create_container_registry is true, use repository:tag instead,
@@ -33,7 +32,7 @@ log_analytics_daily_quota_gb = 1
 log_analytics_retention_days = 30
 
 # Pass notifier tokens out of band, for example:
-# export TF_VAR_notifier_tokens='{"GITHUB_TOKEN":"<from your secret store>"}'
+# export TF_VAR_notifier_tokens='{"AZDO_TOKEN":"<from your secret store>"}'
 notifier_tokens = {}
 
 tags = {}

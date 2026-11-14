@@ -1,6 +1,5 @@
 variable "name" {
   type        = string
-  default     = "healbot"
   description = "Short prefix for resource names. Lowercase letters, numbers, and hyphens. A random suffix is added where the name must be globally unique."
 
   validation {
@@ -11,30 +10,23 @@ variable "name" {
 
 variable "location" {
   type        = string
-  default     = "eastus"
-  description = "Azure region for Healbot and the resources this stack creates."
+  description = "Azure region for Healbot and the resources this module creates."
 }
 
 variable "resource_group_name" {
   type        = string
   default     = ""
-  description = "Resource group name. Empty creates <name>-rg in this stack so terraform destroy removes it."
+  description = "Resource group name. Empty creates <name>-rg in this module so terraform destroy removes it."
 }
 
-variable "hosting" {
-  type        = string
-  default     = "app_service"
-  description = "Where the Healbot process runs. app_service is a Linux App Service custom container. container_apps matches the existing Bicep shape."
-
-  validation {
-    condition     = contains(["app_service", "container_apps"], var.hosting)
-    error_message = "hosting must be app_service or container_apps."
-  }
+variable "tags" {
+  type        = map(string)
+  default     = {}
+  description = "Extra tags. A component=healbot tag is always set."
 }
 
 variable "container_image" {
   type        = string
-  default     = "example.azurecr.io/healbot:0.1.0"
   description = "Image to run. Use a full reference such as example.azurecr.io/healbot:0.1.0. When create_container_registry is true, use repository:tag only, for example healbot:0.1.0."
 
   validation {
@@ -52,42 +44,31 @@ variable "create_container_registry" {
 variable "container_registry_id" {
   type        = string
   default     = ""
-  description = "Resource ID of an existing Azure Container Registry. When set, the identity is granted AcrPull and the app pulls with that identity. Ignored when create_container_registry is true."
-}
-
-variable "app_service_sku" {
-  type        = string
-  default     = "B1"
-  description = "Linux App Service plan SKU. B1 is the cheapest tier that supports Always On and a custom container. Free and Shared do not."
-
-  validation {
-    condition     = !contains(["F1", "D1", "FREE", "SHARED"], upper(var.app_service_sku)) && can(regex("^[A-Za-z][A-Za-z0-9]{1,15}$", var.app_service_sku))
-    error_message = "app_service_sku must support Always On. F1 and D1 do not. B1 is the default."
-  }
+  description = "Resource ID of an existing Azure Container Registry. When set, the identity is granted AcrPull. Ignored when create_container_registry is true."
 }
 
 variable "dry_run" {
   type        = bool
   default     = true
-  description = "Process-wide dry-run ceiling. True refuses live remediation even if a resource policy opts in. Set false only together with a resource allowlist that also sets dry_run false."
+  description = "Process-wide dry-run ceiling. True refuses live remediation even if a resource policy opts in."
 }
 
 variable "enable_plan_scale" {
   type        = bool
   default     = false
-  description = "Grant Microsoft.Web/serverfarms/write on the operator scopes. Required for scale_out of an App Service plan. The permission can also change the SKU, so leave it false until a resource allowlists scale_out."
+  description = "Grant Microsoft.Web/serverfarms/write on the operator scopes. Required for scale_out of an App Service plan. The permission can also change the SKU."
 }
 
 variable "enable_container_scale" {
   type        = bool
   default     = false
-  description = "Grant Microsoft.App/containerApps/write on the operator scopes. Required to scale a Container App or to move ingress traffic during a revision rollback. Activating a revision does not need it."
+  description = "Grant Microsoft.App/containerApps/write on the operator scopes. Required to scale a Container App or to move ingress traffic during a revision rollback."
 }
 
 variable "target_resource_group_ids" {
   type        = list(string)
   default     = []
-  description = "Extra resource groups the identity may operate on. The group Healbot is deployed into is always included. Each group gets its own custom role definition so the role cannot be assigned at subscription scope."
+  description = "Extra resource groups the identity may operate on. The group Healbot is deployed into is always included. Each group gets its own custom role definition."
 
   validation {
     condition = alltrue([
@@ -101,7 +82,7 @@ variable "target_resource_group_ids" {
 variable "log_analytics_daily_quota_gb" {
   type        = number
   default     = 1
-  description = "Daily ingestion cap in GB for the Log Analytics workspace. -1 disables the cap. The default keeps a quiet sandbox small."
+  description = "Daily ingestion cap in GB for the Log Analytics workspace. -1 disables the cap."
 
   validation {
     condition     = var.log_analytics_daily_quota_gb == -1 || var.log_analytics_daily_quota_gb > 0
@@ -124,7 +105,7 @@ variable "notifier_tokens" {
   type        = map(string)
   default     = {}
   sensitive   = true
-  description = "Optional secrets injected as environment variables, for example GITHUB_TOKEN or AZDO_TOKEN. Values are stored in Key Vault. Leave the map empty in git. Pass them with TF_VAR_notifier_tokens or an untracked tfvars file."
+  description = "Optional secrets injected as environment variables, for example AZDO_TOKEN. Values are stored in Key Vault. Leave the map empty in git."
 
   validation {
     condition = alltrue([
@@ -133,10 +114,4 @@ variable "notifier_tokens" {
     ])
     error_message = "notifier_tokens keys must be uppercase environment variable names and values must be non-empty."
   }
-}
-
-variable "tags" {
-  type        = map(string)
-  default     = {}
-  description = "Extra tags applied to resources this stack creates. A component=healbot tag is always set."
 }

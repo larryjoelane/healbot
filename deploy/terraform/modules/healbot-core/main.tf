@@ -24,8 +24,7 @@ locals {
   kv_name  = substr("kv${local.compact}${random_string.suffix.result}", 0, 24)
   acr_name = substr("acr${local.compact}${random_string.suffix.result}", 0, 50)
   web_name = substr(local.name, 0, 60)
-
-  rg_name = var.resource_group_name != "" ? var.resource_group_name : "${var.name}-rg"
+  rg_name  = var.resource_group_name != "" ? var.resource_group_name : "${var.name}-rg"
 
   # Parse the caller-supplied image only. It is known at plan time.
   # A host is the first slash-separated segment when that segment contains a dot.
@@ -74,8 +73,7 @@ locals {
     var.enable_container_scale ? ["Microsoft.App/containerApps/write"] : [],
   )
 
-  # Plain settings shared by both hosts. Tokens are Key Vault references, not literals.
-  healbot_env = {
+  plain_env = {
     HEALBOT_MODE                          = "azure"
     HEALBOT_DRY_RUN                       = var.dry_run ? "true" : "false"
     HEALBOT_ADDR                          = ":43117"
@@ -98,18 +96,6 @@ locals {
       key => "@Microsoft.KeyVault(SecretUri=${secret.versionless_id})"
     },
   )
-
-  hostnames = concat(
-    azurerm_linux_web_app.bot[*].default_hostname,
-    flatten([
-      for app in azurerm_container_app.bot : [for ing in app.ingress : ing.fqdn]
-    ]),
-  )
-  hostname = local.hostnames[0]
-
-  # Action groups cannot set a custom header. The token therefore has to
-  # travel in the query string. It is also stored in Key Vault.
-  webhook_uri = "https://${local.hostname}/v1/ingest/monitor?token=${random_password.webhook.result}"
 
   # Keys are environment variable names, not secrets. for_each cannot take
   # the sensitive map itself.
